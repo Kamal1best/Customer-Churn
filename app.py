@@ -7,20 +7,29 @@ from feature_engineering import perform_feature_engineering
 import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import date, datetime
-import mlflow.pyfunc
-import model
-# Streamlit setup
+import mlflow
+import mlflow.sklearn
+import model  # هنا لازم يكون جواه الموديل المتدرب أو فيه دالة بترجعه
+
+# إعداد Streamlit
 st.set_page_config(page_title="Customer Churn Prediction App", layout="wide")
 st.title("Customer Churn Prediction App")
-mlflow.set_tracking_uri("file:mlruns") 
-with mlflow.start_run() as run:
- 
-    ...
-    mlflow.sklearn.log_model(model, "model")
 
+# ✅ تأكد إن mlruns هيتخزن في نفس الفولدر بتاع المشروع
+mlflow.set_tracking_uri("file:mlruns")
+
+# ✅ حمّل الموديل
+trained_model = model.get_trained_model()  # خليك عامل الدالة دي في model.py
+
+# ✅ سجل الموديل في MLflow
+with mlflow.start_run() as run:
+    mlflow.sklearn.log_model(trained_model, "model")
     run_id = run.info.run_id
 
+# ✅ استخدم URI لتحميل الموديل
 MODEL_URI = f"runs:/{run_id}/model"
+loaded_model = mlflow.pyfunc.load_model(MODEL_URI)
+
 model = None
 if os.path.exists(MODEL_URI):
     model = mlflow.pyfunc.load_model(MODEL_URI)
