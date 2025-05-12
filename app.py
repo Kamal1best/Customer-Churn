@@ -14,9 +14,8 @@ import model  # هنا لازم يكون جواه الموديل المتدرب 
 # إعداد Streamlit
 st.set_page_config(page_title="Customer Churn Prediction App", layout="wide")
 st.title("Customer Churn Prediction App")
-
 # ✅ تأكد إن mlruns هيتخزن في نفس الفولدر بتاع المشروع
-mlflow.set_tracking_uri("file:mlruns")
+mlflow.set_tracking_uri("file:///mount/src/customer-churn/mlruns")
 
 # ✅ حمّل الموديل
 trained_model = model.get_trained_model()  # خليك عامل الدالة دي في model.py
