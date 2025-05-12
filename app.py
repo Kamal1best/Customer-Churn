@@ -12,6 +12,7 @@ import model
 # Streamlit setup
 st.set_page_config(page_title="Customer Churn Prediction App", layout="wide")
 st.title("Customer Churn Prediction App")
+mlflow.set_tracking_uri("file:mlruns") 
 with mlflow.start_run() as run:
  
     ...
