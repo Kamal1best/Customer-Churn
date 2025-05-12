@@ -11,8 +11,14 @@ import mlflow.pyfunc
 # Streamlit setup
 st.set_page_config(page_title="Customer Churn Prediction App", layout="wide")
 st.title("Customer Churn Prediction App")
-# Load the model
-MODEL_URI = 'cc6f237624144accbe6445f0bde1be29'
+with mlflow.start_run() as run:
+ 
+    ...
+    mlflow.sklearn.log_model(model, "model")
+
+    run_id = run.info.run_id
+
+MODEL_URI = f"runs:/{run_id}/model"
 model = None
 if os.path.exists(MODEL_URI):
     model = mlflow.pyfunc.load_model(MODEL_URI)
