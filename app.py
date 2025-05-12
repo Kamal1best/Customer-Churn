@@ -8,6 +8,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import date, datetime
 import mlflow.pyfunc
+import model
 # Streamlit setup
 st.set_page_config(page_title="Customer Churn Prediction App", layout="wide")
 st.title("Customer Churn Prediction App")
