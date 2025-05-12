@@ -1,0 +1,16 @@
+artifact_uri: file:///D:/Experment/new%20project/churn%20project/mlruns/0/6e7e4edf4cf64cce8a9ac12e6905126a/artifacts
+deleted_time: 1747076471299
+end_time: 1747071402032
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: 6e7e4edf4cf64cce8a9ac12e6905126a
+run_name: LightGBM_RandomSearch
+run_uuid: 6e7e4edf4cf64cce8a9ac12e6905126a
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747071373382
+status: 3
+tags: []
+user_id: Kamal
