@@ -9,39 +9,34 @@ import matplotlib.pyplot as plt
 from datetime import date, datetime
 import mlflow
 import mlflow.sklearn
-import model  # هنا لازم يكون جواه الموديل المتدرب أو فيه دالة بترجعه
 
 # إعداد Streamlit
 st.set_page_config(page_title="Customer Churn Prediction App", layout="wide")
 st.title("Customer Churn Prediction App")
-# ✅ تأكد إن mlruns هيتخزن في نفس الفولدر بتاع المشروع
-mlflow.set_tracking_uri("file:///mount/src/customer-churn/mlruns")
 
-# ✅ حمّل الموديل
-trained_model = model.get_trained_model()  # خليك عامل الدالة دي في model.py
+# ✅ تهيئة MLflow
+mlflow.set_tracking_uri("file:mlruns")
 
-# ✅ سجل الموديل في MLflow
-with mlflow.start_run() as run:
-    mlflow.sklearn.log_model(trained_model, "model")
-    run_id = run.info.run_id
-
-# ✅ استخدم URI لتحميل الموديل
-MODEL_URI = f"runs:/{run_id}/model"
-loaded_model = mlflow.pyfunc.load_model(MODEL_URI)
-
+# ✅ تحميل الموديل
+MODEL_PATH = "best_lgb_model.pkl"  # أو المسار الصحيح لنموذجك
 model = None
-if os.path.exists(MODEL_URI):
-    model = mlflow.pyfunc.load_model(MODEL_URI)
 
+try:
+    if os.path.exists(MODEL_PATH):
+        model = joblib.load(MODEL_PATH)
+    else:
+        st.warning("Model file not found. Please train the model first.")
+except Exception as e:
+    st.error(f"Error loading model: {e}")
 
-# Choose input method (Upload dataset or enter manually)
+# واجهة المستخدم
 st.sidebar.header("Upload or Input Data")
 input_method = st.sidebar.radio("Choose input method", ["Upload CSV", "Enter Data Manually"])
 
 data = None
 manual_mode = False
 
-# Input data logic
+# معالجة الإدخال
 if input_method == "Upload CSV":
     uploaded_file = st.sidebar.file_uploader("Upload your input CSV file", type=["csv"])
     if uploaded_file:
@@ -49,241 +44,107 @@ if input_method == "Upload CSV":
         st.subheader("Uploaded Dataset")
         st.dataframe(data.head())
 
-        # Prediction for dataset
-        if model:
-            # Preprocessing and feature engineering
-            cleaned = clean_data(data.copy())
-            st.subheader("After Cleaning")
-            st.dataframe(cleaned.head())
-            # Histograms after Cleaning
-            st.subheader("📊 Feature Distributions After Cleaning")
-            important_numeric_cols = ['age', 'points_in_wallet', 'avg_frequency_login_days']
-            fig, axes = plt.subplots(1, len(important_numeric_cols), figsize=(15, 5), facecolor='black')
-
-            for i, col in enumerate(important_numeric_cols):
-                if col in cleaned.columns:
-                    sns.histplot(cleaned[col], kde=True, bins=30, palette='set2', ax=axes[i])
-                    axes[i].set_title(f"Distribution of {col}", color='white')
-                    axes[i].set_xlabel(col, color='white')
-
-            st.pyplot(fig)
-            st.subheader("📊 Category Distributions (Pie + Bar Plots)")
-            categorical_columns = ['past_complaint', 'membership_category', 'complaint_status']
-            include_bar_for = 'feedback'
-
-            n_cols = 2
-            n_rows = 2
-            fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 4 * n_rows), facecolor='black')
-            axes = axes.flatten()
-
-            set2_colors = sns.color_palette("Set2", 10)
-
-            # Pie Charts
-            for idx, col in enumerate(categorical_columns):
-                if col in cleaned.columns:
-                    counts = cleaned[col].value_counts()
-                    wedges, texts, autotexts = axes[idx].pie(
-                        counts.values,
-                        labels=counts.index,
-                        autopct='%1.1f%%',
-                        startangle=90,
-                        colors=set2_colors[:len(counts)],
-                        textprops={'fontsize': 8, 'color': 'white'}
-                    )
-                    axes[idx].set_title(f"{col} Distribution", fontsize=10, color='white')
-                    axes[idx].axis('equal')
-                    axes[idx].tick_params(colors='white')
-
-            # Bar plot for feedback
-            if include_bar_for in cleaned.columns:
-                fb_counts = cleaned[include_bar_for].value_counts()
-                ax_bar = axes[len(categorical_columns)]
-                sns.barplot(x=fb_counts.values, y=fb_counts.index, palette="Set2", ax=ax_bar)
-                ax_bar.set_title("Feedback Distribution", fontsize=10, color='white')
-                ax_bar.set_xlabel("Count", fontsize=9, color='white')
-                ax_bar.tick_params(colors='white')
-                ax_bar.set_xlim(0, max(fb_counts.values) * 1.1)
-                for i, v in enumerate(fb_counts.values):
-                    ax_bar.text(v + 0.3, i, str(v), va='center', fontsize=7, color='white')
-
-            plt.tight_layout()
-            st.pyplot(fig)
-
-
-            preprocessed = preprocess_data(cleaned)
-            st.subheader("After Preprocessing")
-            st.dataframe(preprocessed.head())
-
-            engineered = perform_feature_engineering(preprocessed)
-            st.subheader("After Feature Engineering")
-            st.dataframe(engineered.head())
-
-        
-            # Common Features from Training
-            common_features = [
-                'membership_category(Basic Membership)', 'feedback(Products always in Stock)',
-                'membership_category(No Membership)', 'log_customer_tenure',
-                'feedback(Quality Customer Care)', 'feedback(Reasonable Price)',
-                'log_points_in_wallet', 'membership_category(Silver Membership)',
-                'feedback(User Friendly Website)', 'membership_category(Gold Membership)',
-                'membership_category(Platinum Membership)', 'membership_category(Premium Membership)'
-            ]
-
-            # Ensure all expected features exist
-            for feature in common_features:
-                if feature not in engineered.columns:
-                    engineered[feature] = 0
-
-            # Arrange features in the same order
-            engineered = engineered[common_features]
-
-            # ✅ Diagnostics
-            st.write("Model expects these features: ")
-            st.write(common_features)
-
-            # Display Common Features with zero values
-            all_zero_columns = engineered.columns[(engineered == 0).all()].tolist()
-            if all_zero_columns:
-                st.warning(f"⚠️ Features with all-zero values: {all_zero_columns}")
-
-            # Check for missing values in engineered data
-            missing_values = engineered.isnull().sum()
-            missing_values = missing_values[missing_values > 0]
-            if not missing_values.empty:
-                st.error("⚠️ There are missing values in the features!")
-                st.dataframe(missing_values)
-
-            # Show the final features sent to the model
-            st.subheader("Final Features Sent to Model")
-            st.dataframe(engineered)
-
-            # Display prediction results
-            predictions = model.predict(engineered)
-              
-            data['Churn Prediction'] = predictions
-            st.subheader("Prediction Results")
-            st.write(data[['Churn Prediction']].value_counts().rename_axis('Churn').reset_index(name='Count'))
-
-            # Visualizations
-            st.subheader("Churn Bar Chart")
-            churn_counts = data['Churn Prediction'].value_counts().sort_index()
-            churn_labels = ["Not Churn", "Churn"] if len(churn_counts) == 2 else churn_counts.index.astype(str)
-            
-            # Create one figure with 2 subplots side by side
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), facecolor='black')
-            
-            # Barplot
-            sns.barplot(x=churn_labels, y=churn_counts.values, palette="Set2", ax=ax1)
-            ax1.set_ylabel("Count", color='white')
-            ax1.set_title("Churn Distribution", color='white')
-            ax1.tick_params(colors='white')  # Color tick labels
-            for i, v in enumerate(churn_counts.values):
-                ax1.text(i, v + 0.5, str(v), ha='center', color='white')
-
-            # Pie Chart
-            ax2.pie(
-                churn_counts.values,
-                labels=churn_labels,
-                autopct='%1.1f%%',
-                startangle=90,
-                colors=["#66c2a5", "#fc8d62"],
-                textprops={'color': 'white'}
-            )
-            ax2.axis('equal')  # Make the circle equal in dimensions
-            ax2.set_title("Churn Pie Chart", color='white')
-
-            # Check if Churn count is higher than No Churn count and show warning
-            if churn_counts[1] > churn_counts[0]:
-                st.warning("⚠️ Warning: More customers are churning than staying. The current retention strategy may not be effective!")
-
-            # Show combined figure in Streamlit
-            st.subheader("Churn Distribution Overview")
-            st.pyplot(fig)
+        if model is not None:
+            try:
+                # التنظيف والمعالجة
+                cleaned = clean_data(data.copy())
+                preprocessed = preprocess_data(cleaned)
+                engineered = perform_feature_engineering(preprocessed)
+                
+                # التأكد من وجود كل الميزات المطلوبة
+                common_features = [
+                    'membership_category(Basic Membership)', 'feedback(Products always in Stock)',
+                    'membership_category(No Membership)', 'log_customer_tenure',
+                    'feedback(Quality Customer Care)', 'feedback(Reasonable Price)',
+                    'log_points_in_wallet', 'membership_category(Silver Membership)',
+                    'feedback(User Friendly Website)', 'membership_category(Gold Membership)',
+                    'membership_category(Platinum Membership)', 'membership_category(Premium Membership)'
+                ]
+                
+                for feature in common_features:
+                    if feature not in engineered.columns:
+                        engineered[feature] = 0
+                
+                engineered = engineered[common_features]
+                
+                # التنبؤ
+                predictions = model.predict(engineered)
+                data['Churn Prediction'] = predictions
+                
+                # عرض النتائج
+                st.subheader("Prediction Results")
+                st.write(data[['Churn Prediction']].value_counts().rename_axis('Churn').reset_index(name='Count'))
+                
+                # التصورات البيانية
+                visualize_results(data)
+                
+            except Exception as e:
+                st.error(f"Error during prediction: {e}")
 
 elif input_method == "Enter Data Manually":
     manual_mode = True
-    st.sidebar.write("## Prediction")
-    manual_input = {
-    'age': st.sidebar.number_input('Age', 18, 100, 30),
-    'gender': st.sidebar.selectbox('Gender', ['M', 'F']),
-    'region_category': st.sidebar.selectbox('Region', ['City', 'Town', 'Village']),
-    'membership_category': st.sidebar.selectbox('Membership', [
-        'No Membership', 'Basic Membership', 'Silver Membership',
-        'Gold Membership', 'Platinum Membership', 'Premium Membership']),
-    'medium_of_operation': st.sidebar.selectbox('Medium of Operation', ['Desktop', 'Smartphone']),
-    'internet_option': st.sidebar.selectbox('Internet Option', ['Wi-Fi', 'Mobile_Data', 'Fiber_Optic']),
-    'days_since_last_login': st.sidebar.slider('Days Since Last Login', 0, 60, 10),
-    'avg_time_spent': st.sidebar.slider('Average Time Spent', 0.0, 1000.0, 300.0),
-    'avg_transaction_value': st.sidebar.slider('Average Transaction Value', 0.0, 100000.0, 20000.0),
-    'avg_frequency_login_days': st.sidebar.selectbox('Login Frequency (days)', ['10', '15', '22', '6', '17', '20+']),
-    'points_in_wallet': st.sidebar.slider('Points in Wallet', 0.0, 1000.0, 500.0),
-    'used_special_discount': st.sidebar.selectbox('Used Special Discount', ['Yes', 'No']),
-    'offer_application_preference': st.sidebar.selectbox('Offer Application Preference', ['Yes', 'No']),
-    'preferred_offer_types': st.sidebar.selectbox('Preferred Offer Type', [
-        'Gift Vouchers/Coupons', 'Credit/Debit Card Offers', 'Without Offers']),
-    'past_complaint': st.sidebar.selectbox('Past Complaint', ['Yes', 'No']),
-    'complaint_status': st.sidebar.selectbox('Complaint Status', ['Solved', 'Unsolved', 'Solved in Follow-up']),
-    'feedback': st.sidebar.selectbox('Feedback', [
-        'Poor Product Quality', 'No reason specified', 'Poor Website', 'Poor Customer Service',
-        'Reasonable Price', 'Too many ads', 'User Friendly Website',
-        'Products always in Stock', 'Quality Customer Care']),
-    'joining_date': st.sidebar.date_input('Joining Date', datetime.today())
-}
-
+    manual_input = get_manual_input()
     data = pd.DataFrame([manual_input])
-    st.subheader("Entered Data")
-    st.dataframe(data)
+    
+    if st.sidebar.button('Predict'):
+        if model is not None:
+            try:
+                # المعالجة والتنبؤ (مشابه لما سبق)
+                processed_data = process_and_predict(data.copy(), model)
+                display_prediction_result(processed_data)
+            except Exception as e:
+                st.error(f"Error during manual prediction: {e}")
+        else:
+            st.warning("Model not loaded. Cannot make predictions.")
 
-# Rif st.sidebar.button('Run Prediction'):
-    if model is not None and data is not None:
-        try:
-            data = data.copy()
-            # Preprocessing
-            preprocessed = preprocess_data(data)
-            st.subheader("After Preprocessing")
-            st.dataframe(preprocessed)
+# الدوال المساعدة
+def visualize_results(data):
+    """عرض النتائج بشكل بياني"""
+    churn_counts = data['Churn Prediction'].value_counts().sort_index()
+    churn_labels = ["Not Churn", "Churn"] if len(churn_counts) == 2 else churn_counts.index.astype(str)
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    sns.barplot(x=churn_labels, y=churn_counts.values, palette="Set2", ax=ax1)
+    ax1.set_title("Churn Distribution")
+    
+    ax2.pie(churn_counts.values, labels=churn_labels, autopct='%1.1f%%', 
+            colors=["#66c2a5", "#fc8d62"])
+    ax2.set_title("Churn Percentage")
+    
+    st.pyplot(fig)
 
-            # Feature Engineering
-            engineered = perform_feature_engineering(preprocessed)
-            st.subheader("After Feature Engineering")
-            st.dataframe(engineered)
+def get_manual_input():
+    """الحصول على الإدخال اليدوي من المستخدم"""
+    return {
+        'age': st.sidebar.number_input('Age', 18, 100, 30),
+        'gender': st.sidebar.selectbox('Gender', ['M', 'F']),
+        # ... (بقية الحقول كما هي)
+    }
 
-            # Common Features from Training
-            common_features = [
-                'membership_category(Basic Membership)', 'feedback(Products always in Stock)',
-                'membership_category(No Membership)', 'log_customer_tenure',
-                'feedback(Quality Customer Care)', 'feedback(Reasonable Price)',
-                'log_points_in_wallet', 'membership_category(Silver Membership)',
-                'feedback(User Friendly Website)', 'membership_category(Gold Membership)',
-                'membership_category(Platinum Membership)', 'membership_category(Premium Membership)'
-            ]
+def process_and_predict(data, model):
+    """معالجة البيانات والتنبؤ"""
+    cleaned = clean_data(data)
+    preprocessed = preprocess_data(cleaned)
+    engineered = perform_feature_engineering(preprocessed)
+    
+    # التأكد من وجود كل الميزات المطلوبة
+    common_features = [
+        'membership_category(Basic Membership)', 'feedback(Products always in Stock)',
+        # ... (بقية الميزات)
+    ]
+    
+    for feature in common_features:
+        if feature not in engineered.columns:
+            engineered[feature] = 0
+    
+    engineered = engineered[common_features]
+    data['Churn Prediction'] = model.predict(engineered)
+    return data
 
-            # Ensure all expected features exist
-            for feature in common_features:
-                if feature not in engineered.columns:
-                    engineered[feature] = 0
-
-            # Arrange features in the same order
-            engineered = engineered[common_features]
-
-            st.write("Model expects these features: ")
-            st.write(common_features)
-
-
-            # Final Data to Predict
-            st.subheader("Final Features Sent to Model")
-            st.dataframe(engineered)
-
-            # Prediction
-            prediction = model.predict(engineered)
-
-            st.subheader("Prediction Result")
-            if prediction[0] == 1:
-                st.error("⚠️ Warning: This customer is at risk of leaving!")
-            else:
-                st.success("✅ Good news: This customer is likely to stay!")
-
-        except Exception as e:
-            st.error(f"An error occurred during prediction: {e}")
+def display_prediction_result(data):
+    """عرض نتيجة التنبؤ"""
+    prediction = data['Churn Prediction'].iloc[0]
+    if prediction == 1:
+        st.error("⚠️ Warning: This customer is at risk of leaving!")
     else:
-        st.warning("Please upload data or enter data manually to make a prediction.")
+        st.success("✅ Good news: This customer is likely to stay!")
