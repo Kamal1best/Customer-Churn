@@ -11,12 +11,11 @@ from sklearn.model_selection import RandomizedSearchCV
 from scipy.stats import uniform, randint
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-from skopt import BayesSearchCV  # Library for Bayesian Optimization
+from lightgbm import LGBMClassifier, early_stopping
+from skopt import BayesSearchCV  
 from sklearn.neighbors import KNeighborsClassifier
-import warnings
 from imblearn.over_sampling import SMOTE
-from skopt.space import Integer, Categorical, Real
+from skopt.space import Integer, Categorical
 
 def split_data_app(data):
     common_features = [
@@ -82,6 +81,48 @@ def svm_model(X_train, X_test, y_train, y_test):
 
 
 
+def LogisticRegression_model(X_train, X_test, y_train, y_test):
+    lr_model = LogisticRegression(solver='liblinear', random_state=42)
+    lr_model.fit(X_train, y_train)
+
+    y_pred = lr_model.predict(X_test)
+
+    print("Evaluation of Logistic Regression Model:")
+    print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred))
+    
+    
+def knn_model(X_train, X_test, y_train, y_test):
+    knn_model = KNeighborsClassifier(n_neighbors=3)
+    knn_model.fit(X_train, y_train)
+    y_pred = knn_model.predict(X_test)
+    print("Evaluation of K-Nearest Neighbors Classifier:")
+    print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred))
+
+
+
+
+
+
+def lg_model(X_train, X_test, y_train, y_test):
+    model = LGBMClassifier()
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    print("Accuracy:", accuracy_score(y_test, y_pred))
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred))
+
+    
+
+
+
+
+
 def  SVM_after_tuning(X_train, X_test, y_train, y_test):
 
     pipeline = make_pipeline(SVC(probability=True, random_state=42))
@@ -90,8 +131,7 @@ def  SVM_after_tuning(X_train, X_test, y_train, y_test):
             'svc__C': uniform(0.1, 10),              
             'svc__gamma': ['scale', 'auto'],
             'svc__kernel': ['linear', 'rbf', 'poly'], 
-            'svc__degree': randint(2, 5)  # 
-        }
+            'svc__degree': randint(2, 5)   }
 
     random_search = RandomizedSearchCV(
             pipeline,
@@ -113,20 +153,74 @@ def  SVM_after_tuning(X_train, X_test, y_train, y_test):
     print(f"Accuracy: {accuracy_score(y_test, y_pred_svm):.4f}")
     print("\nClassification Report:")
     print(classification_report(y_test, y_pred_svm))
+    return y_pred_svm
 
 
 
-def LogisticRegression_model(X_train, X_test, y_train, y_test):
-    lr_model = LogisticRegression(solver='liblinear', random_state=42)
-    lr_model.fit(X_train, y_train)
+def lg_model_tuning(X_train, X_test, y_train, y_test):
+        lgb_model = LGBMClassifier(random_state=42, verbose=-1)
 
-    y_pred = lr_model.predict(X_test)
+        param_dist = {
+            'num_leaves': randint(20, 100),
+            'max_depth': [-1, 10, 20],
+            'learning_rate': uniform(0.01, 0.1),
+            'n_estimators': [100, 200, 300],
+            'min_child_samples': randint(10, 60),
+            'subsample': uniform(0.7, 0.3)}
+        
 
-    print("Evaluation of Logistic Regression Model:")
-    print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred))
+        # RandomizedSearchCV
+        random_search = RandomizedSearchCV(
+            estimator=lgb_model,
+            param_distributions=param_dist,
+            n_iter=20,
+            cv=3,
+            scoring='recall',
+            n_jobs=1,
+            random_state=42
+        )
 
+        random_search.fit(X_train, y_train)
+
+        print("Best Parameters:")
+        for k, v in random_search.best_params_.items():
+            print(f"   {k}: {v}")
+
+        print(f"\n Best Recall (Cross-Validation): {random_search.best_score_:.4f}")
+
+        best_lgb = random_search.best_estimator_
+        y_pred_lg = best_lgb.predict(X_test)
+
+        print(f"\n Test Accuracy: {accuracy_score(y_test, y_pred_lg):.4f}")
+        print("\nClassification Report:\n", classification_report(y_test, y_pred_lg))
+        
+        return y_pred_lg
+
+
+def knn_model_tuning(X_train, X_test, y_train, y_test):
+
+    param_grid = {
+        'n_neighbors': [3, 5, 7, 9, 11, 13,15, 17, 19, 21, 31, 41, 45, 61],
+        'weights': ['uniform', 'distance'],
+        'metric': ['euclidean', 'manhattan']
+    }
+
+
+    knn = KNeighborsClassifier()
+
+    grid_search = GridSearchCV(knn, param_grid, cv=5, scoring='recall', n_jobs=1)
+    grid_search.fit(X_train, y_train)
+
+    best_knn = grid_search.best_estimator_
+
+    y_pred_knn = best_knn.predict(X_test)
+
+    print(" Best Parameters:", grid_search.best_params_)
+    print("Best CV Score:", grid_search.best_score_)
+    print("Accuracy on Test Set:", accuracy_score(y_test, y_pred_knn))
+    print("\n Classification Report:")
+    print(classification_report(y_test, y_pred_knn))
+    return y_pred_knn
 
 
 def LogisticRegression_tuning(X_train, X_test, y_train, y_test):
@@ -135,8 +229,7 @@ def LogisticRegression_tuning(X_train, X_test, y_train, y_test):
     param_space = {
         'C': Integer(1, 1000), 
         'penalty': Categorical(['l1', 'l2']),
-        'max_iter': Integer(100, 1000),
-    }
+        'max_iter': Integer(100, 1000)}
     bayes_search = BayesSearchCV(
         estimator=lr_model,
         search_spaces=param_space,
@@ -160,103 +253,11 @@ def LogisticRegression_tuning(X_train, X_test, y_train, y_test):
 
     print(" Best Parameters found by Bayesian Optimization:")
     print(bayes_search.best_params_)
+    
+    return y_pred_lr
+    
+    
+    
 
 
-
-def  lg_model(X_train, X_test, y_train, y_test):
-    X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train, test_size=0.2, random_state=42,)
-
-    lgbm_model = LGBMClassifier(
-        n_estimators=1000,
-        learning_rate=0.05,
-        random_state=42,
-        verbose=-1
-    )
-
-    lgbm_model.fit(
-        X_train, y_train,
-        eval_set=[(X_valid, y_valid)],
-        callbacks=[early_stopping(stopping_rounds=10)]
-    )
-
-    y_pred = lgbm_model.predict(X_test)
-
-    print(" Evaluation of LightGBM Model (with Early Stopping using callbacks):")
-    print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred))
-
-
-
-def lg_model_tuning(X_train, X_test, y_train, y_test):
-
-    lgb_model = LGBMClassifier(random_state=42, verbose=-1)
-
-    param_dist = {
-        'num_leaves': randint(20, 100),
-        'max_depth': [-1, 10, 20],
-        'learning_rate': uniform(0.01, 0.1),
-        'n_estimators': [100, 200, 300],
-        'min_child_samples': randint(10, 60),
-        'subsample': uniform(0.7, 0.3)
-    }
-
-    # RandomizedSearchCV
-    random_search = RandomizedSearchCV(
-        estimator=lgb_model,
-        param_distributions=param_dist,
-        n_iter=20,
-        cv=3,
-        scoring='recall',
-        n_jobs=1,
-        random_state=42
-    )
-
-    y_pred_lg = random_search.fit(X_train, y_train)
-
-    print("Best Parameters:")
-    for k, v in random_search.best_params_.items():
-        print(f"   {k}: {v}")
-
-    print(f"\n Best Recall (Cross-Validation): {random_search.best_score_:.4f}")
-
-    best_lgb = random_search.best_estimator_
-    y_pred = best_lgb.predict(X_test)
-
-    print(f"\n Test Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-    print("\nClassification Report:\n", classification_report(y_test, y_pred))
-
-def knn_model(X_train, X_test, y_train, y_test):
-    knn_model = KNeighborsClassifier(n_neighbors=3)
-    knn_model.fit(X_train, y_train)
-    y_pred = knn_model.predict(X_test)
-    print("Evaluation of K-Nearest Neighbors Classifier:")
-    print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred))
-    return y_pred
-
-def knn_model_tuning(X_train, X_test, y_train, y_test):
-    y_pred= knn_model(X_train, X_test, y_train, y_test)
-    param_grid = {
-        'n_neighbors': [3, 5, 7, 9, 11, 13,15, 17, 19, 21, 31, 41, 45, 61],
-        'weights': ['uniform', 'distance'],
-        'metric': ['euclidean', 'manhattan']
-    }
-
-
-    knn = KNeighborsClassifier()
-
-    grid_search = GridSearchCV(knn, param_grid, cv=5, scoring='recall', n_jobs=1)
-    grid_search.fit(X_train, y_train)
-
-    best_knn = grid_search.best_estimator_
-
-    y_pred_knn = best_knn.predict(X_test)
-
-    print(" Best Parameters:", grid_search.best_params_)
-    print("Best CV Score:", grid_search.best_score_)
-    print("Accuracy on Test Set:", accuracy_score(y_test, y_pred))
-    print("\n Classification Report:")
-    print(classification_report(y_test, y_pred))
 
