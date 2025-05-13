@@ -62,8 +62,7 @@ def get_manual_input():
 
 def process_data(data):
     """Process data before prediction"""
-    cleaned = clean_data(data)
-    preprocessed = preprocess_data(cleaned)
+    preprocessed = preprocess_data(data)
     engineered = perform_feature_engineering(preprocessed)
 
     required_features = [
