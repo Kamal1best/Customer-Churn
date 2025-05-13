@@ -12,6 +12,11 @@ def clean_data(data):
  # Clean and convert 'avg_frequency_login_days'
  data['avg_frequency_login_days'] = data['avg_frequency_login_days'].replace(['?', 'Error'], np.nan)
  data['avg_frequency_login_days'] = pd.to_numeric(data['avg_frequency_login_days'])
+# Replace negative values
+ for col in data.select_dtypes(include=[np.number]).columns:
+    if (data[col] < 0).any():
+        valid_median = data.loc[data[col] >= 0, col].median()
+        data[col] = data[col].apply(lambda x: valid_median if x < 0 else x) 
  # Fill missing values in 'avg_frequency_login_days' with the mean of the column
  for col in data.columns:
         if data[col].dtype == 'object':
@@ -24,12 +29,6 @@ def clean_data(data):
  return data
 def preprocess_data(data):
   # data = clean_data(data)
-  # Replace negative values
-  for col in data.select_dtypes(include=[np.number]).columns:
-    if (data[col] < 0).any():
-        valid_median = data.loc[data[col] >= 0, col].median()
-        data[col] = data[col].apply(lambda x: valid_median if x < 0 else x)
-  
   def label_encode_categoricals(data, categorical_columns):
    for col in categorical_columns:
      le = LabelEncoder()
