@@ -11,28 +11,73 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import tempfile
 
+# Visualization function
+def plot_visualizations(data):
+    if data is not None and 'Churn Prediction' in data.columns:
+        # Histograms after Cleaning
+        st.subheader("📊 Feature Distributions After Cleaning")
+        important_numeric_cols = ['age', 'points_in_wallet', 'avg_frequency_login_days']
+        fig, axes = plt.subplots(1, len(important_numeric_cols), figsize=(15, 5))
+        for i, col in enumerate(important_numeric_cols):
+            if col in data.columns:
+                sns.histplot(data[col], kde=True, bins=30, ax=axes[i])
+                axes[i].set_title(f"Distribution of {col}")
+        st.pyplot(fig)
+
+        # Category Distributions (Pie + Bar Plots)
+        st.subheader("📊 Category Distributions")
+        categorical_columns = ['past_complaint', 'membership_category', 'complaint_status']
+        include_bar_for = 'feedback'
+        fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+        axes = axes.flatten()
+
+        # Pie Charts
+        for idx, col in enumerate(categorical_columns):
+            if col in data.columns:
+                counts = data[col].value_counts()
+                axes[idx].pie(
+                    counts.values,
+                    labels=counts.index,
+                    autopct='%1.1f%%',
+                    startangle=90
+                )
+                axes[idx].set_title(f"{col} Distribution")
+                axes[idx].axis('equal')
+
+        # Bar plot for feedback
+        if include_bar_for in data.columns:
+            fb_counts = data[include_bar_for].value_counts()
+            ax_bar = axes[len(categorical_columns)]
+            sns.barplot(x=fb_counts.values, y=fb_counts.index, ax=ax_bar)
+            ax_bar.set_title("Feedback Distribution")
+            for i, v in enumerate(fb_counts.values):
+                ax_bar.text(v + 0.3, i, str(v), va='center')
+
+        plt.tight_layout()
+        st.pyplot(fig)
+
+        # Churn Visualization (Bar and Pie Chart)
+        st.subheader("Churn Distribution Overview")
+        churn_counts = data['Churn Prediction'].value_counts().sort_index()
+        churn_labels = ["Not Churn", "Churn"] if len(churn_counts) == 2 else churn_counts.index.astype(str)
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+        sns.barplot(x=churn_labels, y=churn_counts.values, ax=ax1)
+        ax1.set_ylabel("Count")
+        ax1.set_title("Churn Distribution")
+        for i, v in enumerate(churn_counts.values):
+            ax1.text(i, v + 0.5, str(v), ha='center')
+        ax2.pie(
+            churn_counts.values,
+            labels=churn_labels,
+            autopct='%1.1f%%',
+            startangle=90
+        )
+        ax2.set_title("Churn Pie Chart")
+        ax2.axis('equal')
+        st.pyplot(fig)
+
 # Helper functions
-def plot_results(data):
-    """Display results as visualizations"""
-    churn_counts = data['Churn Prediction'].value_counts().sort_index()
-    labels = ["Not Churn", "Churn"] if len(churn_counts) == 2 else churn_counts.index.astype(str)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-    sns.barplot(x=labels, y=churn_counts.values, palette="Set2", ax=ax1)
-    ax1.set_title("Churn Distribution")
-
-    ax2.pie(churn_counts.values, labels=labels, autopct='%1.1f%%', 
-            colors=["#66c2a5", "#fc8d62"])
-    ax2.set_title("Churn Percentage")
-
-    st.pyplot(fig)
-
-    if len(churn_counts) == 2 and churn_counts[1] > churn_counts[0]:
-        st.warning("Warning: More customers are churning than staying!")
-
 def get_manual_input():
-    """Get manual input data"""
     return {
         'age': st.sidebar.number_input('Age', 18, 100, 30),
         'gender': st.sidebar.selectbox('Gender', ['Male', 'Female']),
@@ -45,7 +90,7 @@ def get_manual_input():
         'days_since_last_login': st.sidebar.slider('Days Since Last Login', 0, 60, 10),
         'avg_time_spent': st.sidebar.slider('Average Time Spent', 0.0, 1000.0, 300.0),
         'avg_transaction_value': st.sidebar.slider('Average Transaction Value', 0.0, 100000.0, 20000.0),
-        'avg_frequency_login_days': st.sidebar.selectbox('Average Login Frequency (days)', ['10', '15', '22', '6', '17', '20+']),
+        'avg_frequency_login_days': st.sidebar.selectbox('Average Login Frequency (days)', [10, 15, 22, 6, 17, 20]),
         'points_in_wallet': st.sidebar.slider('Points in Wallet', 0.0, 1000.0, 500.0),
         'used_special_discount': st.sidebar.selectbox('Used Special Discount', ['Yes', 'No']),
         'offer_application_preference': st.sidebar.selectbox('Offer Application Preference', ['Yes', 'No']),
@@ -61,142 +106,97 @@ def get_manual_input():
     }
 
 def process_data(data):
-    """Process data before prediction"""
+    # Clean, preprocess, engineer features
+  
     preprocessed = preprocess_data(data)
     engineered = perform_feature_engineering(preprocessed)
 
+    # Ensure required features
     required_features = [
-        'membership_category(Basic Membership)', 
+        'membership_category(Basic Membership)',
         'feedback(Products always in Stock)',
-        'membership_category(No Membership)', 
+        'membership_category(No Membership)',
         'log_customer_tenure',
-        'feedback(Quality Customer Care)', 
+        'feedback(Quality Customer Care)',
         'feedback(Reasonable Price)',
-        'log_points_in_wallet', 
+        'log_points_in_wallet',
         'membership_category(Silver Membership)',
-        'feedback(User Friendly Website)', 
+        'feedback(User Friendly Website)',
         'membership_category(Gold Membership)',
-        'membership_category(Platinum Membership)', 
+        'membership_category(Platinum Membership)',
         'membership_category(Premium Membership)'
     ]
-
-    for feature in required_features:
-        if feature not in engineered.columns:
-            engineered[feature] = 0
-
+    for feat in required_features:
+        if feat not in engineered.columns:
+            engineered[feat] = 0
     engineered = engineered[required_features]
+
+    # Predict
     data['Churn Prediction'] = model.predict(engineered)
     return data
 
 def display_prediction(data):
-    """Display prediction result"""
-    prediction = data['Churn Prediction'].iloc[0]
-    if prediction == 1:
+    pred = data['Churn Prediction'].iloc[0]
+    if pred == 1:
         st.error("⚠️ Warning: This customer is at risk of churning!")
     else:
         st.success("✅ Good news: This customer is likely to stay!")
-    
     st.subheader("Prediction Details")
     st.write(data)
 
-# Streamlit UI
+# Streamlit UI setup
 st.set_page_config(page_title="Customer Churn Prediction App", layout="wide")
 st.title("Customer Churn Prediction App")
 
-# 1. Initialize MLflow safely
+# Initialize MLflow
 try:
-    # Create temporary directory for MLflow if there are permission issues
-    temp_dir = tempfile.mkdtemp()
-    mlflow.set_tracking_uri(f"file:{temp_dir}")
+    tmp = tempfile.mkdtemp()
+    mlflow.set_tracking_uri(f"file:{tmp}")
     st.success("MLflow initialized successfully")
 except Exception as e:
-    st.error(f"Error initializing MLflow: {str(e)}")
+    st.error(f"Error initializing MLflow: {e}")
 
-# 2. Load the model
+# Load model
 MODEL_PATH = "best_lgb_model.pkl"
-model = None
-
 try:
-    if os.path.exists(MODEL_PATH):
-        model = joblib.load(MODEL_PATH)
+    model = joblib.load(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
+    if model:
         st.success("Prediction model loaded successfully")
     else:
         st.warning("Model file not found. Please ensure it's in the correct path.")
 except Exception as e:
-    st.error(f"Error loading model: {str(e)}")
+    st.error(f"Error loading model: {e}")
 
-# 3. Data input interface
+# Input method
 st.sidebar.header("Data Input Method")
 input_method = st.sidebar.radio("Choose input method", ["Upload CSV", "Manual Input"])
-
 data = None
 
-# 4. Handle file upload
 if input_method == "Upload CSV":
-    uploaded_file = st.sidebar.file_uploader("Choose CSV file", type=["csv"])
-
-    if uploaded_file:
+    file = st.sidebar.file_uploader("Choose CSV file", type=["csv"])
+    if file:
         try:
-            data = pd.read_csv(uploaded_file)
+            data = pd.read_csv(file)
             st.subheader("Uploaded Data")
             st.dataframe(data.head())
-            
-            if model is not None:
-                # Data processing
-                cleaned_data = clean_data(data.copy())
-                preprocessed_data = preprocess_data(cleaned_data)
-                engineered_data = perform_feature_engineering(preprocessed_data)
-                
-                # List of expected features
-                required_features = [
-                    'membership_category(Basic Membership)', 
-                    'feedback(Products always in Stock)',
-                    'membership_category(No Membership)', 
-                    'log_customer_tenure',
-                    'feedback(Quality Customer Care)', 
-                    'feedback(Reasonable Price)',
-                    'log_points_in_wallet', 
-                    'membership_category(Silver Membership)',
-                    'feedback(User Friendly Website)', 
-                    'membership_category(Gold Membership)',
-                    'membership_category(Platinum Membership)', 
-                    'membership_category(Premium Membership)'
-                ]
-                
-                # Ensure all required features exist
-                for feature in required_features:
-                    if feature not in engineered_data.columns:
-                        engineered_data[feature] = 0
-                
-                # Reorder columns as required
-                engineered_data = engineered_data[required_features]
-                
-                # Make predictions
-                predictions = model.predict(engineered_data)
-                data['Churn Prediction'] = predictions
-                
-                # Show results
+            if model:
+                processed = process_data(data.copy())
                 st.subheader("Prediction Results")
-                st.write(data[['Churn Prediction']].value_counts().rename_axis('Status').reset_index(name='Count'))
-                
-                # Show visualizations
-                plot_results(data)
-            
+                st.write(processed['Churn Prediction'].value_counts())
+                plot_visualizations(processed)
         except Exception as e:
-            st.error(f"Error processing data: {str(e)}")
+            st.error(f"Error processing data: {e}")
 
-# 5. Handle manual input
-elif input_method == "Manual Input":
-    manual_input = get_manual_input()
-    data = pd.DataFrame([manual_input])
-
+else:  # Manual Input
+    manual = get_manual_input()
+    data = pd.DataFrame([manual])
     if st.sidebar.button('Predict'):
-        if model is not None:
+        if model:
             try:
-                # Process data and make prediction
-                processed_data = process_data(data.copy())
-                display_prediction(processed_data)
+                result = process_data(data.copy())
+                display_prediction(result)
+                plot_visualizations(result)
             except Exception as e:
-                st.error(f"Prediction error: {str(e)}")
+                st.error(f"Prediction error: {e}")
         else:
             st.warning("Model not loaded. Cannot make predictions.")
