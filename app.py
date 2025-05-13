@@ -17,20 +17,18 @@ def plot_visualizations(data):
         # Histograms after Cleaning
         st.subheader("📊 Feature Distributions After Cleaning")
         important_numeric_cols = ['age', 'points_in_wallet', 'avg_frequency_login_days']
-        # get Set2 palette colors
         set2_colors = sns.color_palette("Set2", len(important_numeric_cols))
         fig, axes = plt.subplots(1, len(important_numeric_cols), figsize=(15, 5), facecolor='black')
         for i, col in enumerate(important_numeric_cols):
-            if col in data.columns:
-                axes[i].set_facecolor('black')
-                sns.histplot(data[col], kde=True, bins=30, ax=axes[i], color=set2_colors[i])
-                axes[i].set_title(f"Distribution of {col}", color='white')
-                axes[i].tick_params(colors='white')
-                axes[i].set_xlabel(col, color='white')
-                axes[i].set_ylabel('Count', color='white')
+            axes[i].set_facecolor('black')
+            sns.histplot(data[col], kde=True, bins=30, ax=axes[i], color=set2_colors[i])
+            axes[i].set_title(f"Distribution of {col}", color='white')
+            axes[i].tick_params(colors='white')
+            axes[i].set_xlabel(col, color='white')
+            axes[i].set_ylabel('Count', color='white')
         st.pyplot(fig)
 
-        # Category Distributions (Pie + Bar Plots)
+        # Category Distributions (Pie + Bar)
         st.subheader("📊 Category Distributions")
         categorical_columns = ['past_complaint', 'membership_category', 'complaint_status']
         include_bar_for = 'feedback'
@@ -39,54 +37,42 @@ def plot_visualizations(data):
         for ax in axes:
             ax.set_facecolor('black')
 
-        # Pie Charts
+        # Pie charts
         for idx, col in enumerate(categorical_columns):
-            if col in data.columns:
-                counts = data[col].value_counts()
-                wedges, texts, autotexts = axes[idx].pie(
-                    counts.values,
-                    labels=counts.index,
-                    autopct='%1.1f%%',
-                    startangle=90,
-                    textprops={'color': 'white', 'fontsize': 8}
-                )
-                axes[idx].set_title(f"{col} Distribution", color='white')
-                axes[idx].axis('equal')
+            counts = data[col].value_counts()
+            wedges, texts, autotexts = axes[idx].pie(
+                counts.values,
+                labels=counts.index,
+                autopct='%1.1f%%',
+                startangle=90,
+                textprops={'color': 'white', 'fontsize': 8}
+            )
+            axes[idx].set_title(f"{col} Distribution", color='white')
+            axes[idx].axis('equal')
 
-        # Bar plot for feedback using Set2
-        if include_bar_for in data.columns:
-            fb_counts = data[include_bar_for].value_counts()
-            ax_bar = axes[len(categorical_columns)]
-            sns.barplot(x=fb_counts.values, y=fb_counts.index, ax=ax_bar, palette="Set2")
-            ax_bar.set_title("Feedback Distribution", color='white')
-            ax_bar.tick_params(colors='white')
-            ax_bar.set_xlabel('Count', color='white')
-            ax_bar.set_ylabel(None)
-            for i, v in enumerate(fb_counts.values):
-                ax_bar.text(v + 0.3, i, str(v), va='center', color='white')
+        # Feedback bar plot
+        fb_counts = data[include_bar_for].value_counts()
+        ax_bar = axes[len(categorical_columns)]
+        sns.barplot(x=fb_counts.values, y=fb_counts.index, ax=ax_bar, palette="Set2")
+        ax_bar.set_title("Feedback Distribution", color='white')
+        ax_bar.tick_params(colors='white')
+        ax_bar.set_xlabel('Count', color='white')
+        for i, v in enumerate(fb_counts.values):
+            ax_bar.text(v + 0.3, i, str(v), va='center', color='white')
 
         plt.tight_layout()
         st.pyplot(fig)
 
-        # Churn Visualization (Bar and Pie Chart)
+        # Churn overview
         st.subheader("Churn Distribution Overview")
         churn_counts = data['Churn Prediction'].value_counts().sort_index()
         churn_labels = ["Not Churn", "Churn"] if len(churn_counts) == 2 else churn_counts.index.astype(str)
-        # Use first two colors of Set2 for bar and pie
         churn_colors = sns.color_palette("Set2", len(churn_labels))
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), facecolor='black')
-        for ax in (ax1, ax2):
-            ax.set_facecolor('black')
-
-        # Barplot with Set2 colors
+        ax1.set_facecolor('black'); ax2.set_facecolor('black')
         sns.barplot(x=churn_labels, y=churn_counts.values, ax=ax1, palette=churn_colors)
-        ax1.set_ylabel("Count", color='white')
-        ax1.set_title("Churn Distribution", color='white')
-        ax1.tick_params(colors='white')
-        for i, v in enumerate(churn_counts.values):
-            ax1.text(i, v + 0.5, str(v), ha='center', color='white')
-
-        # Pie Chart with Set2 colors
+        ax1.set_title("Churn Distribution", color='white'); ax1.set_ylabel('Count', color='white'); ax1.tick_params(colors='white')
+        for i, v in enumerate(churn_counts.values): ax1.text(i, v + 0.5, str(v), ha='center', color='white')
         ax2.pie(
             churn_counts.values,
             labels=churn_labels,
@@ -95,8 +81,7 @@ def plot_visualizations(data):
             colors=churn_colors,
             textprops={'color': 'white'}
         )
-        ax2.set_title("Churn Pie Chart", color='white')
-        ax2.axis('equal')
+        ax2.set_title("Churn Pie Chart", color='white'); ax2.axis('equal')
         st.pyplot(fig)
 
 # Helper functions
@@ -129,6 +114,7 @@ def get_manual_input():
     }
 
 def process_data(data):
+
     preprocessed = preprocess_data(data)
     engineered = perform_feature_engineering(preprocessed)
     required_features = [
@@ -193,4 +179,23 @@ if input_method == "Upload CSV":
     file = st.sidebar.file_uploader("Choose CSV file", type=["csv"])
     if file:
         try:
-            data = pd.read_
+            data = pd.read_csv(file)
+            st.subheader("Uploaded Data")
+            st.dataframe(data.head())
+            if model:
+                processed = process_data(data.copy())
+                st.subheader("Prediction Results")
+                st.write(processed['Churn Prediction'].value_counts())
+                plot_visualizations(processed)
+        except Exception as e:
+            st.error(f"Error processing data: {e}")
+else:
+    manual = get_manual_input()
+    data = pd.DataFrame([manual])
+    if st.sidebar.button('Predict'):
+        if model:
+            try:
+                result = process_data(data.copy())
+                display_prediction(result)
+            except Exception as e:
+                st.error(f"Prediction error: {e}")
