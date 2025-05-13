@@ -11,47 +11,56 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import tempfile
 
-# Visualization function
+# Visualization function for CSV upload only
 def plot_visualizations(data):
     if data is not None and 'Churn Prediction' in data.columns:
         # Histograms after Cleaning
         st.subheader("📊 Feature Distributions After Cleaning")
         important_numeric_cols = ['age', 'points_in_wallet', 'avg_frequency_login_days']
-        fig, axes = plt.subplots(1, len(important_numeric_cols), figsize=(15, 5))
+        fig, axes = plt.subplots(1, len(important_numeric_cols), figsize=(15, 5), facecolor='black')
         for i, col in enumerate(important_numeric_cols):
             if col in data.columns:
-                sns.histplot(data[col], kde=True, bins=30, ax=axes[i])
-                axes[i].set_title(f"Distribution of {col}")
+                axes[i].set_facecolor('black')
+                sns.histplot(data[col], kde=True, bins=30, ax=axes[i], color='white')
+                axes[i].set_title(f"Distribution of {col}", color='white')
+                axes[i].tick_params(colors='white')
+                axes[i].set_xlabel(col, color='white')
+                axes[i].set_ylabel('Count', color='white')
         st.pyplot(fig)
 
         # Category Distributions (Pie + Bar Plots)
         st.subheader("📊 Category Distributions")
         categorical_columns = ['past_complaint', 'membership_category', 'complaint_status']
         include_bar_for = 'feedback'
-        fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+        fig, axes = plt.subplots(2, 2, figsize=(10, 8), facecolor='black')
         axes = axes.flatten()
+        for ax in axes:
+            ax.set_facecolor('black')
 
         # Pie Charts
         for idx, col in enumerate(categorical_columns):
             if col in data.columns:
                 counts = data[col].value_counts()
-                axes[idx].pie(
+                wedges, texts, autotexts = axes[idx].pie(
                     counts.values,
                     labels=counts.index,
                     autopct='%1.1f%%',
-                    startangle=90
+                    startangle=90,
+                    textprops={'color': 'white', 'fontsize': 8}
                 )
-                axes[idx].set_title(f"{col} Distribution")
+                axes[idx].set_title(f"{col} Distribution", color='white')
                 axes[idx].axis('equal')
 
         # Bar plot for feedback
         if include_bar_for in data.columns:
             fb_counts = data[include_bar_for].value_counts()
             ax_bar = axes[len(categorical_columns)]
-            sns.barplot(x=fb_counts.values, y=fb_counts.index, ax=ax_bar)
-            ax_bar.set_title("Feedback Distribution")
+            sns.barplot(x=fb_counts.values, y=fb_counts.index, ax=ax_bar, color='white')
+            ax_bar.set_title("Feedback Distribution", color='white')
+            ax_bar.tick_params(colors='white')
+            ax_bar.set_xlabel('Count', color='white')
             for i, v in enumerate(fb_counts.values):
-                ax_bar.text(v + 0.3, i, str(v), va='center')
+                ax_bar.text(v + 0.3, i, str(v), va='center', color='white')
 
         plt.tight_layout()
         st.pyplot(fig)
@@ -60,19 +69,27 @@ def plot_visualizations(data):
         st.subheader("Churn Distribution Overview")
         churn_counts = data['Churn Prediction'].value_counts().sort_index()
         churn_labels = ["Not Churn", "Churn"] if len(churn_counts) == 2 else churn_counts.index.astype(str)
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-        sns.barplot(x=churn_labels, y=churn_counts.values, ax=ax1)
-        ax1.set_ylabel("Count")
-        ax1.set_title("Churn Distribution")
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), facecolor='black')
+        for ax in (ax1, ax2):
+            ax.set_facecolor('black')
+
+        # Barplot
+        sns.barplot(x=churn_labels, y=churn_counts.values, ax=ax1, color='white')
+        ax1.set_ylabel("Count", color='white')
+        ax1.set_title("Churn Distribution", color='white')
+        ax1.tick_params(colors='white')
         for i, v in enumerate(churn_counts.values):
-            ax1.text(i, v + 0.5, str(v), ha='center')
+            ax1.text(i, v + 0.5, str(v), ha='center', color='white')
+
+        # Pie Chart
         ax2.pie(
             churn_counts.values,
             labels=churn_labels,
             autopct='%1.1f%%',
-            startangle=90
+            startangle=90,
+            textprops={'color': 'white'}
         )
-        ax2.set_title("Churn Pie Chart")
+        ax2.set_title("Churn Pie Chart", color='white')
         ax2.axis('equal')
         st.pyplot(fig)
 
@@ -106,12 +123,9 @@ def get_manual_input():
     }
 
 def process_data(data):
-    # Clean, preprocess, engineer features
-  
-    preprocessed = preprocess_data(data)
+    cleaned = clean_data(data)
+    preprocessed = preprocess_data(cleaned)
     engineered = perform_feature_engineering(preprocessed)
-
-    # Ensure required features
     required_features = [
         'membership_category(Basic Membership)',
         'feedback(Products always in Stock)',
@@ -130,8 +144,6 @@ def process_data(data):
         if feat not in engineered.columns:
             engineered[feat] = 0
     engineered = engineered[required_features]
-
-    # Predict
     data['Churn Prediction'] = model.predict(engineered)
     return data
 
@@ -170,8 +182,8 @@ except Exception as e:
 # Input method
 st.sidebar.header("Data Input Method")
 input_method = st.sidebar.radio("Choose input method", ["Upload CSV", "Manual Input"])
-data = None
 
+data = None
 if input_method == "Upload CSV":
     file = st.sidebar.file_uploader("Choose CSV file", type=["csv"])
     if file:
@@ -186,8 +198,7 @@ if input_method == "Upload CSV":
                 plot_visualizations(processed)
         except Exception as e:
             st.error(f"Error processing data: {e}")
-
-else:  # Manual Input
+else:
     manual = get_manual_input()
     data = pd.DataFrame([manual])
     if st.sidebar.button('Predict'):
@@ -195,8 +206,5 @@ else:  # Manual Input
             try:
                 result = process_data(data.copy())
                 display_prediction(result)
-                plot_visualizations(result)
             except Exception as e:
                 st.error(f"Prediction error: {e}")
-        else:
-            st.warning("Model not loaded. Cannot make predictions.")
