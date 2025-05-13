@@ -14,14 +14,19 @@ import tempfile
 # Visualization function for CSV upload only
 def plot_visualizations(data):
     if data is not None and 'Churn Prediction' in data.columns:
+        # Prepare Set2 palette
+        numeric_cols = ['age', 'points_in_wallet', 'avg_frequency_login_days']
+        cat_cols = ['past_complaint', 'membership_category', 'complaint_status']
+        labels_colors = sns.color_palette("Set2", len(cat_cols))
+        churn_labels = ["Not Churn", "Churn"]
+        churn_colors = sns.color_palette("Set2", 2)
+
         # Histograms after Cleaning
         st.subheader("📊 Feature Distributions After Cleaning")
-        important_numeric_cols = ['age', 'points_in_wallet', 'avg_frequency_login_days']
-        set2_colors = sns.color_palette("Set2", len(important_numeric_cols))
-        fig, axes = plt.subplots(1, len(important_numeric_cols), figsize=(15, 5), facecolor='black')
-        for i, col in enumerate(important_numeric_cols):
+        fig, axes = plt.subplots(1, len(numeric_cols), figsize=(15, 5), facecolor='black')
+        for i, col in enumerate(numeric_cols):
             axes[i].set_facecolor('black')
-            sns.histplot(data[col], kde=True, bins=30, ax=axes[i], color=set2_colors[i])
+            sns.histplot(data[col], kde=True, bins=30, ax=axes[i], color=churn_colors[i % len(churn_colors)])
             axes[i].set_title(f"Distribution of {col}", color='white')
             axes[i].tick_params(colors='white')
             axes[i].set_xlabel(col, color='white')
@@ -30,33 +35,34 @@ def plot_visualizations(data):
 
         # Category Distributions (Pie + Bar)
         st.subheader("📊 Category Distributions")
-        categorical_columns = ['past_complaint', 'membership_category', 'complaint_status']
-        include_bar_for = 'feedback'
         fig, axes = plt.subplots(2, 2, figsize=(10, 8), facecolor='black')
         axes = axes.flatten()
         for ax in axes:
             ax.set_facecolor('black')
 
-        # Pie charts
-        for idx, col in enumerate(categorical_columns):
+        # Pie charts for categories
+        for idx, col in enumerate(cat_cols):
             counts = data[col].value_counts()
+            palette = labels_colors[:len(counts)]
             wedges, texts, autotexts = axes[idx].pie(
                 counts.values,
                 labels=counts.index,
                 autopct='%1.1f%%',
                 startangle=90,
+                colors=palette,
                 textprops={'color': 'white', 'fontsize': 8}
             )
             axes[idx].set_title(f"{col} Distribution", color='white')
             axes[idx].axis('equal')
 
-        # Feedback bar plot
-        fb_counts = data[include_bar_for].value_counts()
-        ax_bar = axes[len(categorical_columns)]
+        # Bar plot for feedback
+        fb_counts = data['feedback'].value_counts()
+        ax_bar = axes[len(cat_cols)]
         sns.barplot(x=fb_counts.values, y=fb_counts.index, ax=ax_bar, palette="Set2")
         ax_bar.set_title("Feedback Distribution", color='white')
         ax_bar.tick_params(colors='white')
         ax_bar.set_xlabel('Count', color='white')
+        ax_bar.set_ylabel(None)
         for i, v in enumerate(fb_counts.values):
             ax_bar.text(v + 0.3, i, str(v), va='center', color='white')
 
@@ -65,23 +71,31 @@ def plot_visualizations(data):
 
         # Churn overview
         st.subheader("Churn Distribution Overview")
-        churn_counts = data['Churn Prediction'].value_counts().sort_index()
-        churn_labels = ["Not Churn", "Churn"] if len(churn_counts) == 2 else churn_counts.index.astype(str)
-        churn_colors = sns.color_palette("Set2", len(churn_labels))
+        counts = data['Churn Prediction'].value_counts().sort_index()
+        labels = ["Not Churn", "Churn"] if len(counts) == 2 else counts.index.astype(str)
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), facecolor='black')
-        ax1.set_facecolor('black'); ax2.set_facecolor('black')
-        sns.barplot(x=churn_labels, y=churn_counts.values, ax=ax1, palette=churn_colors)
-        ax1.set_title("Churn Distribution", color='white'); ax1.set_ylabel('Count', color='white'); ax1.tick_params(colors='white')
-        for i, v in enumerate(churn_counts.values): ax1.text(i, v + 0.5, str(v), ha='center', color='white')
+        ax1.set_facecolor('black')
+        ax2.set_facecolor('black')
+
+        # Barplot for churn
+        sns.barplot(x=labels, y=counts.values, ax=ax1, palette="Set2")
+        ax1.set_title("Churn Distribution", color='white')
+        ax1.set_ylabel('Count', color='white')
+        ax1.tick_params(colors='white')
+        for i, v in enumerate(counts.values):
+            ax1.text(i, v + 0.5, str(v), ha='center', color='white')
+
+        # Pie chart for churn
         ax2.pie(
-            churn_counts.values,
-            labels=churn_labels,
+            counts.values,
+            labels=labels,
             autopct='%1.1f%%',
             startangle=90,
             colors=churn_colors,
             textprops={'color': 'white'}
         )
-        ax2.set_title("Churn Pie Chart", color='white'); ax2.axis('equal')
+        ax2.set_title("Churn Pie Chart", color='white')
+        ax2.axis('equal')
         st.pyplot(fig)
 
 # Helper functions
@@ -114,7 +128,7 @@ def get_manual_input():
     }
 
 def process_data(data):
-
+  
     preprocessed = preprocess_data(data)
     engineered = perform_feature_engineering(preprocessed)
     required_features = [
